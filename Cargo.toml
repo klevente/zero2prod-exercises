@@ -6,6 +6,11 @@ edition = "2021"
 [lib]
 path = "src/lib.rs"
 
+# not required, but good practice to put it here
+[[bin]] # double [] signifies an array, as there can be multiple binaries in a project
+path = "src/main.rs"
+name = "zero2prod"
+
 [dependencies]
 actix-web = "=4.0.0-beta.10"
 actix-http = "=3.0.0-beta.11"
