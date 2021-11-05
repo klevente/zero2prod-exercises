@@ -17,6 +17,8 @@ pub struct FormData {
         subscriber_name = %form.name
     )
 )]
+// https://github.com/tokio-rs/tracing/issues/1450
+#[allow(clippy::async_yields_async)] // required to silence a false-positive
 pub async fn subscribe(
     form: web::Form<FormData>,
     // access the connection from application state (dependency injection)
