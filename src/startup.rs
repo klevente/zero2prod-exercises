@@ -37,7 +37,12 @@ impl Application {
         );
         let listener = TcpListener::bind(address)?;
         let port = listener.local_addr().unwrap().port();
-        let server = run(listener, connection_pool, email_client)?;
+        let server = run(
+            listener,
+            connection_pool,
+            email_client,
+            &configuration.application.base_url,
+        )?;
 
         Ok(Self { port, server })
     }
@@ -57,15 +62,20 @@ pub fn get_connection_pool(configuration: &DatabaseSettings) -> PgPool {
         .connect_lazy_with(configuration.options_with_db())
 }
 
+// a wrapper type is required as actix-web uses types as keys in the context
+pub struct ApplicationBaseUrl(pub String);
+
 pub fn run(
     listener: TcpListener,
     db_pool: PgPool,
     email_client: EmailClient,
+    base_url: &str,
 ) -> Result<Server, std::io::Error> {
     // wrap the pool in an Arc smart pointer, which is `Clone`, as it is required
     // as actix spins up multiple servers using the closure supplied below, so it needs to clone state variables
     let db_pool = Data::new(db_pool);
     let email_client = Data::new(email_client);
+    let base_url = Data::new(ApplicationBaseUrl(base_url.to_string()));
     // capture `connection` from the surrounding environment
     let server = HttpServer::new(move || {
         App::new()
@@ -77,6 +87,7 @@ pub fn run(
             // get a pointer copy and attach it to the app state
             .app_data(db_pool.clone())
             .app_data(email_client.clone())
+            .app_data(base_url.clone())
     })
     .listen(listener)?
     .run();
