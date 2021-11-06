@@ -50,7 +50,8 @@ async fn spawn_app() -> TestApp {
         configuration.email_client.base_url,
         sender_email,
         configuration.email_client.authorization_token,
-    );
+    )
+    .expect("Failed to parse base URL");
 
     let server =
         run(listener, connection_pool.clone(), email_client).expect("Failed to bind address");
