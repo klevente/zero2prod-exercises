@@ -13,10 +13,11 @@ impl EmailClient {
         base_url: String,
         sender: SubscriberEmail,
         authorization_token: String,
+        timeout: std::time::Duration,
     ) -> Result<Self, url::ParseError> {
         let http_client = Client::builder()
             // always set a timeout when handling I/O
-            .timeout(std::time::Duration::from_secs(10))
+            .timeout(timeout)
             .build()
             .unwrap();
         let base_url = Url::parse(&base_url)?;
@@ -95,8 +96,13 @@ mod tests {
     }
 
     fn email_client(base_url: String) -> EmailClient {
-        EmailClient::new(base_url, email(), Faker.fake())
-            .expect("Failed to parse the mock server's URL.")
+        EmailClient::new(
+            base_url,
+            email(),
+            Faker.fake(),
+            std::time::Duration::from_millis(200),
+        )
+        .expect("Failed to parse the mock server's URL.")
     }
 
     #[tokio::test]

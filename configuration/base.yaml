@@ -11,3 +11,4 @@ email_client:
   sender_email: "test@gmail.com"
   # production token will be dealt with outside VCS, as it is secret
   authorization_token: "dummy-token"
+  timeout_milliseconds: 10000
