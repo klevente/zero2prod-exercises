@@ -10,9 +10,9 @@ pub struct EmailClient {
 
 impl EmailClient {
     pub fn new(
-        base_url: String,
+        base_url: &str,
         sender: SubscriberEmail,
-        authorization_token: String,
+        authorization_token: &str,
         timeout: std::time::Duration,
     ) -> Result<Self, url::ParseError> {
         let http_client = Client::builder()
@@ -25,7 +25,7 @@ impl EmailClient {
             http_client,
             base_url,
             sender,
-            authorization_token,
+            authorization_token: authorization_token.to_string(),
         })
     }
 
@@ -95,11 +95,12 @@ mod tests {
         SubscriberEmail::parse(SafeEmail().fake()).unwrap()
     }
 
-    fn email_client(base_url: String) -> EmailClient {
+    fn email_client(base_url: &str) -> EmailClient {
+        let authorization_token: String = Faker.fake();
         EmailClient::new(
             base_url,
             email(),
-            Faker.fake(),
+            authorization_token.as_str(),
             std::time::Duration::from_millis(200),
         )
         .expect("Failed to parse the mock server's URL.")
@@ -109,7 +110,7 @@ mod tests {
     async fn send_email_sends_the_expected_request() {
         // Arrange
         let mock_server = MockServer::start().await;
-        let email_client = email_client(mock_server.uri());
+        let email_client = email_client(&mock_server.uri());
 
         Mock::given(header_exists("X-Postmark-Server-Token"))
             .and(header("Content-Type", "application/json"))
@@ -134,7 +135,7 @@ mod tests {
     async fn send_email_fails_if_the_server_returns_500() {
         // Arrange
         let mock_server = MockServer::start().await;
-        let email_client = email_client(mock_server.uri());
+        let email_client = email_client(&mock_server.uri());
 
         Mock::given(any())
             .respond_with(ResponseTemplate::new(500))
@@ -155,7 +156,7 @@ mod tests {
     async fn send_email_times_out_if_the_server_takes_too_long() {
         // Arrange
         let mock_server = MockServer::start().await;
-        let email_client = email_client(mock_server.uri());
+        let email_client = email_client(&mock_server.uri());
 
         let response = ResponseTemplate::new(200).set_delay(std::time::Duration::from_secs(180));
         Mock::given(any())
