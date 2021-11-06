@@ -6,3 +6,8 @@ database:
   username: "postgres"
   password: "password"
   database_name: "newsletter"
+email_client:
+  base_url: "http://localhost"
+  sender_email: "test@gmail.com"
+  # production token will be dealt with outside VCS, as it is secret
+  authorization_token: "dummy-token"
