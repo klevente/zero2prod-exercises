@@ -1,13 +1,33 @@
-use crate::domain::{NewSubscriber, SubscriberName};
+use crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName};
 use actix_web::{web, HttpResponse};
 use chrono::Utc;
 use sqlx::PgPool;
+use std::convert::{TryFrom, TryInto};
 use uuid::Uuid;
 
 #[derive(serde::Deserialize)]
 pub struct FormData {
     email: String,
     name: String,
+}
+
+pub fn parse_subscriber(form: FormData) -> Result<NewSubscriber, String> {
+    let name = SubscriberName::parse(form.name)?;
+    let email = SubscriberEmail::parse(form.email)?;
+    Ok(NewSubscriber { email, name })
+}
+
+// implementing `TryFrom` also gives us `TryInto` for free, resulting in 2-way conversion
+// `TryFrom` usage: `NewSubscriber::try_from(form)`
+// `TryInto` usage: `form.try_into()`, this is cleaner and less code
+impl TryFrom<FormData> for NewSubscriber {
+    type Error = String;
+
+    fn try_from(value: FormData) -> Result<Self, Self::Error> {
+        let name = SubscriberName::parse(value.name)?;
+        let email = SubscriberEmail::parse(value.email)?;
+        Ok(Self { email, name })
+    }
 }
 
 #[tracing::instrument(
@@ -25,14 +45,9 @@ pub async fn subscribe(
     // access the connection from application state (dependency injection)
     pool: web::Data<PgPool>,
 ) -> HttpResponse {
-    let name = match SubscriberName::parse(form.0.name) {
-        Ok(name) => name,
-        // return 400 if parsing failed
+    let new_subscriber = match form.0.try_into() {
+        Ok(email) => email,
         Err(_) => return HttpResponse::BadRequest().finish(),
-    };
-    let new_subscriber = NewSubscriber {
-        email: form.0.email,
-        name,
     };
     match insert_subscriber(&pool, &new_subscriber).await {
         Ok(_) => HttpResponse::Ok().finish(),
@@ -54,7 +69,7 @@ pub async fn insert_subscriber(
         values ($1, $2, $3, $4)
         "#,
         Uuid::new_v4(),
-        new_subscriber.email,
+        new_subscriber.email.as_ref(),
         new_subscriber.name.as_ref(),
         Utc::now()
     )
