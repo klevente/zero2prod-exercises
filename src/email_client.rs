@@ -20,7 +20,7 @@ impl EmailClient {
             .timeout(timeout)
             .build()
             .unwrap();
-        let base_url = Url::parse(&base_url)?;
+        let base_url = Url::parse(base_url)?;
         Ok(Self {
             http_client,
             base_url,
