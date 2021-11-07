@@ -152,36 +152,66 @@ fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Erro
     Ok(Credentials { username, password })
 }
 
+#[tracing::instrument(name = "Validate credentials", skip(credentials, pool))]
 async fn validate_credentials(
     credentials: Credentials,
     pool: &PgPool,
 ) -> Result<uuid::Uuid, PublishError> {
-    let row: Option<_> = sqlx::query!(
-        r#"select user_id, password_hash from users where username = $1"#,
-        credentials.username
+    let (user_id, expected_password_hash) = get_stored_credentials(&credentials.username, pool)
+        .await
+        .map_err(PublishError::UnexpectedError)?
+        .ok_or_else(|| PublishError::AuthError(anyhow::anyhow!("Unknown username.")))?;
+
+    // get and pass the current `Span` to the background thread as it is thread-local,
+    // meaning it cannot access the parent if it is not explicitly passed over
+    let current_span = tracing::Span::current();
+    // create a background thread where this blocking operation can execute without hanging
+    // the async thread this function is executed on
+    actix_web::rt::task::spawn_blocking(move || {
+        // run the verification inside the current `Span`, returning the `Result`, hence no `;`
+        current_span.in_scope(|| verify_password_hash(expected_password_hash, credentials.password))
+    })
+    .await
+    // `spawn_blocking` is a fallible operation, so the `Err` must be handled
+    .context("Failed to spawn blocking task.")
+    // double `?`: the first is for bubbling the `UnexpectedError`, the second is for
+    // bubbling the `AuthError` returned by `verify_password_hash`
+    .map_err(PublishError::UnexpectedError)??;
+
+    Ok(user_id)
+}
+
+// function for retrieving user id and hash based on username
+#[tracing::instrument(name = "Get stored credentials", skip(username, pool))]
+async fn get_stored_credentials(
+    username: &str,
+    pool: &PgPool,
+) -> Result<Option<(uuid::Uuid, String)>, anyhow::Error> {
+    let row = sqlx::query!(
+        "select user_id, password_hash from users where username = $1",
+        username,
     )
     .fetch_optional(pool)
     .await
-    .context("Failed to perform a query to retrieve stored credentials.")
-    .map_err(PublishError::UnexpectedError)?;
+    .context("Failed to perform a query to retrieve stored credentials.")?
+    .map(|row| (row.user_id, row.password_hash));
+    Ok(row)
+}
 
-    let (expected_password_hash, user_id) = match row {
-        Some(row) => (row.password_hash, row.user_id),
-        None => {
-            return Err(PublishError::AuthError(anyhow::anyhow!(
-                "Unknown username."
-            )))
-        }
-    };
-
+#[tracing::instrument(
+    name = "Verify password hash",
+    skip(expected_password_hash, password_candidate)
+)]
+fn verify_password_hash(
+    expected_password_hash: String,
+    password_candidate: String,
+) -> Result<(), PublishError> {
     let expected_password_hash = PasswordHash::new(&expected_password_hash)
-        .context("Failed to parse hash in PHC string format.")
+        .context("Failed to parse hash in PHC string form.")
         .map_err(PublishError::UnexpectedError)?;
 
     Argon2::default()
-        .verify_password(credentials.password.as_bytes(), &expected_password_hash)
+        .verify_password(password_candidate.as_bytes(), &expected_password_hash)
         .context("Invalid password.")
-        .map_err(PublishError::AuthError)?;
-
-    Ok(user_id)
+        .map_err(PublishError::AuthError)
 }
