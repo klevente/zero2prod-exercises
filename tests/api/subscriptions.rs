@@ -141,3 +141,21 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
     // the two links should be indentical
     assert_eq!(confirmation_links.html, confirmation_links.plain_text);
 }
+
+#[actix_rt::test]
+async fn subscribe_fails_if_there_is_a_fatal_database_error() {
+    // Arrange
+    let app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    // sabotage the database
+    sqlx::query!("alter table subscription_tokens drop column subscription_token;")
+        .execute(&app.db_pool)
+        .await
+        .unwrap();
+
+    // Act
+    let response = app.post_subscriptions(body.into()).await;
+
+    // Assert
+    assert_eq!(response.status().as_u16(), 500);
+}
