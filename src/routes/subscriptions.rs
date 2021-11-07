@@ -8,7 +8,6 @@ use chrono::Utc;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sqlx::{PgPool, Postgres, Transaction};
 use std::convert::{TryFrom, TryInto};
-use std::error::Error;
 use uuid::Uuid;
 
 #[derive(serde::Deserialize)]
@@ -180,15 +179,18 @@ pub struct StoreTokenError(sqlx::Error);
 // required for `ResponseError` to log an error message
 impl std::fmt::Debug for StoreTokenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}\nCaused by:\n\t{}", self, self.0)
+        // recursively traverse the error chain to print out all causes all the way to the root
+        error_chain_fmt(self, f)
     }
 }
 
 // required for `ResponseError` to pretty-print an error message
 impl std::fmt::Display for StoreTokenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // recursively traverse the error chain to print out all causes all the way to the root
-        error_chain_fmt(self, f)
+        write!(
+            f,
+            "A database error was encountered while trying to store a subscription token."
+        )
     }
 }
 
