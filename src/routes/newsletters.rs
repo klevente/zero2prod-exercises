@@ -1,5 +1,7 @@
-use crate::routes::error_chain_fmt;
+use crate::domain::SubscriberEmail;
+use crate::{email_client::EmailClient, routes::error_chain_fmt};
 use actix_web::{http::StatusCode, web, HttpResponse, ResponseError};
+use anyhow::Context;
 use sqlx::PgPool;
 
 #[derive(serde::Deserialize)]
@@ -35,26 +37,64 @@ impl ResponseError for PublishError {
 }
 
 pub async fn publish_newsletter(
-    _body: web::Json<BodyData>,
+    body: web::Json<BodyData>,
     pool: web::Data<PgPool>,
+    email_client: web::Data<EmailClient>,
 ) -> Result<HttpResponse, PublishError> {
-    let _subscribers = get_confirmed_subscribers(&pool).await?;
+    let subscribers = get_confirmed_subscribers(&pool).await?;
+    for subscriber in subscribers {
+        match subscriber {
+            Ok(subscriber) => {
+                email_client
+                    .send_email(
+                        &subscriber.email,
+                        &body.title,
+                        &body.content.html,
+                        &body.content.text,
+                    )
+                    .await
+                    // lazy version of context, which only calls the closure when an error has occurred
+                    // this is good because `format!` allocates on the heap
+                    .with_context(|| {
+                        format!("failed to send newsletter issue to {}", subscriber.email)
+                    })?;
+            }
+            Err(error) => {
+                // record the error chain as a structured field on the log record
+                tracing::warn!(error.cause_chain = ?error,
+                "Skipping a confirmed subscriber as their stored contact details are invalid.");
+            }
+        }
+    }
     Ok(HttpResponse::Ok().finish())
 }
 
 struct ConfirmedSubscriber {
-    email: String,
+    email: SubscriberEmail,
 }
 
 #[tracing::instrument(name = "Get confirmed subscribers", skip(pool))]
 async fn get_confirmed_subscribers(
     pool: &PgPool,
-) -> Result<Vec<ConfirmedSubscriber>, anyhow::Error> {
+) -> Result<Vec<Result<ConfirmedSubscriber, anyhow::Error>>, anyhow::Error> {
+    // local struct used for extracting only the email field from the database
+    struct Row {
+        email: String,
+    }
     let rows = sqlx::query_as!(
-        ConfirmedSubscriber,
+        Row,
         r#"select email from subscriptions where status = 'confirmed'"#
     )
     .fetch_all(pool)
     .await?;
-    Ok(rows)
+
+    // map the rows to the proper type
+    let confirmed_subscribers = rows
+        .into_iter()
+        .map(|r| match SubscriberEmail::parse(r.email) {
+            Ok(email) => Ok(ConfirmedSubscriber { email }),
+            Err(error) => Err(anyhow::anyhow!(error)),
+        })
+        .collect();
+    Ok(confirmed_subscribers)
 }
