@@ -76,7 +76,7 @@ async fn clicking_on_the_confirmation_link_confirms_a_subscriber() {
 }
 
 #[actix_rt::test]
-async fn sending_an_unknown_token_to_confirm_returns_unauthorized_with_message() {
+async fn sending_an_unknown_token_to_confirm_returns_401_with_message() {
     // Arrange
     let app = spawn_app().await;
     let dummy_token: String = Faker.fake();
@@ -92,6 +92,5 @@ async fn sending_an_unknown_token_to_confirm_returns_unauthorized_with_message()
     // Assert
     assert_eq!(response.status().as_u16(), 401);
     let response_text = response.text().await.unwrap();
-    dbg!(&response_text);
     assert!(!response_text.is_empty());
 }
