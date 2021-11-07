@@ -60,6 +60,32 @@
       "nullable": []
     }
   },
+  "8a06ca2e5d18489d7f757d3db254337fe1fa78445c142747914b46fbee4d8809": {
+    "query": "select user_id, password_hash from users where username = $1",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "user_id",
+          "type_info": "Uuid"
+        },
+        {
+          "ordinal": 1,
+          "name": "password_hash",
+          "type_info": "Text"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false
+      ]
+    }
+  },
   "cc13934abe0c7d8c02b4475e8b37fe88c8ff30c6a32eabb3ac6fd6e37c0b2e21": {
     "query": "select email from subscriptions where status = 'confirmed'",
     "describe": {
@@ -72,27 +98,6 @@
       ],
       "parameters": {
         "Left": []
-      },
-      "nullable": [
-        false
-      ]
-    }
-  },
-  "f6da446c1140cf83f770e768be83697364ee948a4f599f8ef828ac0532b15d92": {
-    "query": "select user_id from users where username = $1 and password_hash = $2",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "user_id",
-          "type_info": "Uuid"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Text"
-        ]
       },
       "nullable": [
         false
