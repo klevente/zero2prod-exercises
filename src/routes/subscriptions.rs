@@ -54,23 +54,30 @@ pub async fn subscribe(
     base_url: web::Data<ApplicationBaseUrl>,
 ) -> Result<HttpResponse, SubscribeError> {
     let new_subscriber = form.0.try_into().map_err(SubscribeError::ValidationError)?;
-    let mut transaction = pool.begin().await.map_err(SubscribeError::PoolError)?;
+    let mut transaction = pool
+        .begin()
+        .await
+        // `Box` the underlying error and store it as an unexpected one
+        .map_err(|e| SubscribeError::UnexpectedError(Box::new(e)))?;
     let subscriber_id = insert_subscriber(&mut transaction, &new_subscriber)
         .await
-        .map_err(SubscribeError::InsertSubscriberError)?;
+        .map_err(|e| SubscribeError::UnexpectedError(Box::new(e)))?;
     let subscription_token = generate_subscription_token();
-    store_token(&mut transaction, subscriber_id, &subscription_token).await?;
+    store_token(&mut transaction, subscriber_id, &subscription_token)
+        .await
+        .map_err(|e| SubscribeError::UnexpectedError(Box::new(e)))?;
     transaction
         .commit()
         .await
-        .map_err(SubscribeError::TransactionCommitError)?;
+        .map_err(|e| SubscribeError::UnexpectedError(Box::new(e)))?;
     send_confirmation_email(
         &email_client,
         new_subscriber,
         &base_url.0,
         &subscription_token,
     )
-    .await?;
+    .await
+    .map_err(|e| SubscribeError::UnexpectedError(Box::new(e)))?;
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -163,8 +170,29 @@ fn generate_subscription_token() -> String {
         .collect()
 }
 
+/// Better version for errors, as it is completely opaque to callers how this function works,
+/// as it only exposes types for user errors and internal errors that can be of any type
+#[derive(thiserror::Error)]
+pub enum SubscribeError {
+    #[error("{0}")]
+    ValidationError(String),
+    #[error(transparent)] // delegates `Display` and `source` implementations to the wrapped type
+    UnexpectedError(#[from] Box<dyn std::error::Error>),
+}
+
+impl ResponseError for SubscribeError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            SubscribeError::ValidationError(_) => StatusCode::BAD_REQUEST,
+            SubscribeError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
+
 /// Type for encapsulating all types of errors that can occur during a subscription
-#[derive(thiserror::Error)] // generate code for this error type
+/// This is not ideal, as it exposes a lot of implementation details by having an
+/// error variant for every fallible operation in the function
+/*#[derive(thiserror::Error)] // generate code for this error type
 pub enum SubscribeError {
     #[error("{0}")] // error message is the first field of this instance
     ValidationError(String), // as `String` does not implement `Error`, no `#[source]` is present
@@ -180,12 +208,6 @@ pub enum SubscribeError {
     SendEmailError(#[from] reqwest::Error),
 }
 
-impl std::fmt::Debug for SubscribeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        error_chain_fmt(self, f)
-    }
-}
-
 impl ResponseError for SubscribeError {
     // return the appropriate status code based on what error occurred
     fn status_code(&self) -> StatusCode {
@@ -197,6 +219,13 @@ impl ResponseError for SubscribeError {
             | SubscribeError::StoreTokenError(_)
             | SubscribeError::SendEmailError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
+    }
+}
+ */
+
+impl std::fmt::Debug for SubscribeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        error_chain_fmt(self, f)
     }
 }
 
