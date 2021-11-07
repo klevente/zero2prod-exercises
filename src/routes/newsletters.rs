@@ -77,16 +77,9 @@ struct ConfirmedSubscriber {
 async fn get_confirmed_subscribers(
     pool: &PgPool,
 ) -> Result<Vec<Result<ConfirmedSubscriber, anyhow::Error>>, anyhow::Error> {
-    // local struct used for extracting only the email field from the database
-    struct Row {
-        email: String,
-    }
-    let rows = sqlx::query_as!(
-        Row,
-        r#"select email from subscriptions where status = 'confirmed'"#
-    )
-    .fetch_all(pool)
-    .await?;
+    let rows = sqlx::query!(r#"select email from subscriptions where status = 'confirmed'"#)
+        .fetch_all(pool)
+        .await?;
 
     // map the rows to the proper type
     let confirmed_subscribers = rows
