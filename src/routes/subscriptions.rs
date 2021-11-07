@@ -37,6 +37,31 @@ impl TryFrom<FormData> for NewSubscriber {
     }
 }
 
+/// Better version for errors, as it is completely opaque to callers how this function works,
+/// as it only exposes types for user errors and internal errors that can be of any type
+#[derive(thiserror::Error)]
+pub enum SubscribeError {
+    #[error("{0}")]
+    ValidationError(String),
+    #[error(transparent)]
+    UnexpectedError(#[from] anyhow::Error),
+}
+
+impl ResponseError for SubscribeError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            SubscribeError::ValidationError(_) => StatusCode::BAD_REQUEST,
+            SubscribeError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
+
+impl std::fmt::Debug for SubscribeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        error_chain_fmt(self, f)
+    }
+}
+
 #[tracing::instrument(
     name = "Adding a new subscriber",
     skip(form, pool, email_client, base_url),
@@ -173,25 +198,6 @@ fn generate_subscription_token() -> String {
         .collect()
 }
 
-/// Better version for errors, as it is completely opaque to callers how this function works,
-/// as it only exposes types for user errors and internal errors that can be of any type
-#[derive(thiserror::Error)]
-pub enum SubscribeError {
-    #[error("{0}")]
-    ValidationError(String),
-    #[error(transparent)]
-    UnexpectedError(#[from] anyhow::Error),
-}
-
-impl ResponseError for SubscribeError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            SubscribeError::ValidationError(_) => StatusCode::BAD_REQUEST,
-            SubscribeError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-}
-
 /// Type for encapsulating all types of errors that can occur during a subscription
 /// This is not ideal, as it exposes a lot of implementation details by having an
 /// error variant for every fallible operation in the function
@@ -225,12 +231,6 @@ impl ResponseError for SubscribeError {
     }
 }
  */
-
-impl std::fmt::Debug for SubscribeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        error_chain_fmt(self, f)
-    }
-}
 
 /// New error type, wrapping `sqlx::Error`
 pub struct StoreTokenError(sqlx::Error);
