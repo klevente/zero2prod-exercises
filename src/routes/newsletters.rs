@@ -5,6 +5,7 @@ use actix_web::{
     web, HttpResponse, ResponseError,
 };
 use anyhow::Context;
+use sha3::Digest;
 use sqlx::PgPool;
 
 #[derive(serde::Deserialize)]
@@ -155,10 +156,14 @@ async fn validate_credentials(
     credentials: Credentials,
     pool: &PgPool,
 ) -> Result<uuid::Uuid, PublishError> {
+    let password_hash = sha3::Sha3_256::digest(credentials.password.as_bytes());
+    // format the array as lowercase hexadecimal encoding
+    // the hash column could also be modified to be of type binary, but this saves a migration
+    let password_hash = format!("{:x}", password_hash);
     let user_id: Option<_> = sqlx::query!(
-        r#"select user_id from users where username = $1 and password = $2"#,
+        r#"select user_id from users where username = $1 and password_hash = $2"#,
         credentials.username,
-        credentials.password
+        password_hash
     )
     .fetch_optional(pool)
     .await

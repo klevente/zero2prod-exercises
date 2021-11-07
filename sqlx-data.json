@@ -45,27 +45,6 @@
       "nullable": []
     }
   },
-  "6d090b2094d406b661dfd3da2f3565b844180b86bf869d5d3d9caaa69fba96b8": {
-    "query": "select user_id from users where username = $1 and password = $2",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "user_id",
-          "type_info": "Uuid"
-        }
-      ],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Text"
-        ]
-      },
-      "nullable": [
-        false
-      ]
-    }
-  },
   "6d63457514e9be2b0fdf1b30c46a65702f37021e86c968de2eb51f9c196698da": {
     "query": "\n        insert into subscriptions (id, email, name, subscribed_at, status)\n        values ($1, $2, $3, $4, 'pending_confirmation')\n        ",
     "describe": {
@@ -93,6 +72,27 @@
       ],
       "parameters": {
         "Left": []
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "f6da446c1140cf83f770e768be83697364ee948a4f599f8ef828ac0532b15d92": {
+    "query": "select user_id from users where username = $1 and password_hash = $2",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "user_id",
+          "type_info": "Uuid"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text"
+        ]
       },
       "nullable": [
         false
