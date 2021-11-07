@@ -1,4 +1,5 @@
 use crate::helpers::spawn_app;
+use fake::{Fake, Faker};
 use wiremock::{
     matchers::{method, path},
     Mock, ResponseTemplate,
@@ -72,4 +73,25 @@ async fn clicking_on_the_confirmation_link_confirms_a_subscriber() {
     assert_eq!(saved.email, "ursula_le_guin@gmail.com");
     assert_eq!(saved.name, "le guin");
     assert_eq!(saved.status, "confirmed");
+}
+
+#[actix_rt::test]
+async fn sending_an_unknown_token_to_confirm_returns_unauthorized_with_message() {
+    // Arrange
+    let app = spawn_app().await;
+    let dummy_token: String = Faker.fake();
+
+    // Act
+    let response = reqwest::get(&format!(
+        "{}/subscriptions/confirm?subscription_token={}",
+        app.address, dummy_token
+    ))
+    .await
+    .unwrap();
+
+    // Assert
+    assert_eq!(response.status().as_u16(), 401);
+    let response_text = response.text().await.unwrap();
+    dbg!(&response_text);
+    assert!(!response_text.is_empty());
 }
