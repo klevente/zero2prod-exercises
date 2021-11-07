@@ -1,3 +1,4 @@
+use actix_web::rt::task::JoinHandle;
 use tracing::subscriber::set_global_default;
 use tracing::Subscriber;
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
@@ -14,7 +15,7 @@ use tracing_subscriber::{fmt::MakeWriter, layer::SubscriberExt, EnvFilter, Regis
 pub fn get_subscriber(
     name: String,
     env_filter: String,
-    // a function returing a sink where logs can be written
+    // a function returning a sink where logs can be written
     sink: impl MakeWriter + Send + Sync + 'static,
 ) -> impl Subscriber + Send + Sync {
     let env_filter =
@@ -32,4 +33,20 @@ pub fn get_subscriber(
 pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
     LogTracer::init().expect("Failed to set logger.");
     set_global_default(subscriber).expect("Failed to set subscriber.");
+}
+
+pub fn spawn_blocking_with_tracing<F, R>(f: F) -> JoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    // get and pass the current `Span` to the background thread as it is thread-local,
+    // meaning it cannot access the parent if it is not explicitly passed over
+    let current_span = tracing::Span::current();
+    // create a background thread where this blocking operation can execute without hanging
+    // the async thread this function is executed on
+    actix_web::rt::task::spawn_blocking(move || {
+        // run the code inside the current `Span`, returning its result, hence no `;`
+        current_span.in_scope(f)
+    })
 }

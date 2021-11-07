@@ -1,5 +1,7 @@
-use crate::domain::SubscriberEmail;
-use crate::{email_client::EmailClient, routes::error_chain_fmt};
+use crate::{
+    domain::SubscriberEmail, email_client::EmailClient, routes::error_chain_fmt,
+    telemetry::spawn_blocking_with_tracing,
+};
 use actix_web::{
     http::{header, HeaderMap, HeaderValue, StatusCode},
     web, HttpResponse, ResponseError,
@@ -162,14 +164,8 @@ async fn validate_credentials(
         .map_err(PublishError::UnexpectedError)?
         .ok_or_else(|| PublishError::AuthError(anyhow::anyhow!("Unknown username.")))?;
 
-    // get and pass the current `Span` to the background thread as it is thread-local,
-    // meaning it cannot access the parent if it is not explicitly passed over
-    let current_span = tracing::Span::current();
-    // create a background thread where this blocking operation can execute without hanging
-    // the async thread this function is executed on
-    actix_web::rt::task::spawn_blocking(move || {
-        // run the verification inside the current `Span`, returning the `Result`, hence no `;`
-        current_span.in_scope(|| verify_password_hash(expected_password_hash, credentials.password))
+    spawn_blocking_with_tracing(move || {
+        verify_password_hash(expected_password_hash, credentials.password)
     })
     .await
     // `spawn_blocking` is a fallible operation, so the `Err` must be handled
