@@ -39,13 +39,11 @@ pub async fn confirm(
     parameters: web::Query<Parameters>,
     pool: web::Data<PgPool>,
 ) -> Result<HttpResponse, ConfirmationError> {
-    /*let id = match get_subscriber_id_from_token(&pool, &parameters.subscription_token).await {
-        Ok(id) => id,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };*/
     let subscriber_id = get_subscriber_id_from_token(&pool, &parameters.subscription_token)
         .await
+        // if query failed, convert to `UnexpectedError` with the added message
         .context("Failed to retrieve the subscriber id associated with the provided token.")?
+        // if `None` is returned, convert it to an `UnknownToken` error instead
         .ok_or(ConfirmationError::UnknownToken)?;
 
     confirm_subscriber(&pool, subscriber_id)
