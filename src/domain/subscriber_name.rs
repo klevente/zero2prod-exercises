@@ -5,7 +5,7 @@ pub struct SubscriberName(String);
 
 impl SubscriberName {
     /// returns a `SubscriberName` instance if `s` satisfies all requirements for it,
-    /// otherwise, it panics - this is the only way to create an instance outside this module!
+    /// otherwise, it returns an error message - this is the only way to create an instance outside this module!
     pub fn parse(s: String) -> Result<SubscriberName, String> {
         let is_empty_or_whitespace = s.trim().is_empty();
         let is_too_long = s.graphemes(true).count() > 256;
@@ -13,11 +13,24 @@ impl SubscriberName {
         let forbidden_characters = ['/', '(', ')', '"', '<', '>', '\\', '{', '}'];
         let contains_forbidden_characters = s.chars().any(|g| forbidden_characters.contains(&g));
 
-        if is_empty_or_whitespace || is_too_long || contains_forbidden_characters {
-            Err(format!("{} is not a valid subscriber name.", s))
+        if is_empty_or_whitespace {
+            Err(format!("Subscriber names cannot be empty, but '{}' is.", s))
+        } else if is_too_long {
+            Err(format!(
+                "Subscriber names can only be 256 characters or less, but '{}' is longer",
+                s
+            ))
+        } else if contains_forbidden_characters {
+            Err(format!(
+                "Subscriber names cannot contain special characters, but '{}' does",
+                s
+            ))
         } else {
             Ok(Self(s))
         }
+
+        /*else if is_empty_or_whitespace || is_too_long || contains_forbidden_characters {
+        Err(format!("{} is not a valid subscriber name.", s))*/
     }
 }
 

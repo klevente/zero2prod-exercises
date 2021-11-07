@@ -77,7 +77,7 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
 }
 
 #[actix_rt::test]
-async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
+async fn subscribe_returns_a_400_and_error_message_when_fields_are_present_but_invalid() {
     // Arrange
     let app = spawn_app().await;
     let test_cases = vec![
@@ -93,6 +93,12 @@ async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
             400,
             response.status().as_u16(),
             "The API did not return a 400 Bad Request when the payload was {}.",
+            description
+        );
+        let response_text = response.text().await.unwrap();
+        assert!(
+            !response_text.is_empty(),
+            "The API did not return an error description text when the payload was {}.",
             description
         );
     }
