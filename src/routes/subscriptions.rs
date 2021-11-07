@@ -1,6 +1,7 @@
 use crate::{
     domain::{NewSubscriber, SubscriberEmail, SubscriberName},
     email_client::EmailClient,
+    routes::error_chain_fmt,
     startup::ApplicationBaseUrl,
 };
 use actix_http::StatusCode;
@@ -50,8 +51,8 @@ pub enum SubscribeError {
 impl ResponseError for SubscribeError {
     fn status_code(&self) -> StatusCode {
         match self {
-            SubscribeError::ValidationError(_) => StatusCode::BAD_REQUEST,
-            SubscribeError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::ValidationError(_) => StatusCode::BAD_REQUEST,
+            Self::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -260,7 +261,7 @@ impl std::error::Error for StoreTokenError {
     }
 }
 
-/// Traverse the whole error chain to the root cause, printing out everything on the way
+/*/// Traverse the whole error chain to the root cause, printing out everything on the way
 /// This feature is available in nightly by using `std::error::Error::chain`
 fn error_chain_fmt(
     e: &impl std::error::Error,
@@ -273,4 +274,4 @@ fn error_chain_fmt(
         current = cause.source();
     }
     Ok(())
-}
+}*/
