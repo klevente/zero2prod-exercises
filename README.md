@@ -21,3 +21,7 @@ Improve the subscription flow by thinking about the topics below:
 - Add validation on the incoming token, we are currently passing the raw user input straight into a query (thanks sqlx for protecting us from SQL injections <3);
 - Use a proper templating solution for our emails (e.g. tera);
 - Anything that comes to your mind!
+
+## Error Handling
+
+Errors should be logged when they are handled, so if the error is being propagated upstream via `?` or `return Err(...)`, the error should not be logged - the only reasonable operation would be to add additional context to it via these propagating layers.
