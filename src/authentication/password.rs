@@ -1,11 +1,9 @@
 use crate::telemetry::spawn_blocking_with_tracing;
-use actix_web::http::header::HeaderMap;
 use anyhow::Context;
 use argon2::{
     password_hash::SaltString, Algorithm, Argon2, Params, PasswordHash, PasswordHasher,
     PasswordVerifier, Version,
 };
-use base64::Engine;
 use secrecy::{ExposeSecret, Secret};
 use sqlx::PgPool;
 
