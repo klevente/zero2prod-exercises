@@ -1,16 +1,14 @@
 use crate::helpers::{spawn_app, TestApp};
 
-#[actix_rt::test]
+#[tokio::test]
 async fn health_check_works() {
     // Arrange
     let TestApp { address, .. } = spawn_app().await;
-
-    // use reqwest to perform HTTP queries to the app
     let client = reqwest::Client::new();
 
     // Act
     let response = client
-        .get(&format!("{}/health_check", &address))
+        .get(&format!("{address}/health_check"))
         .send()
         .await
         .expect("Failed to execute request.");

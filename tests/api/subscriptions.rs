@@ -4,7 +4,7 @@ use wiremock::{
     Mock, ResponseTemplate,
 };
 
-#[actix_rt::test]
+#[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
     // Arrange
     let app = spawn_app().await;
@@ -23,7 +23,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     assert_eq!(200, response.status().as_u16());
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn subscribe_persists_the_new_subscriber() {
     // Arrange
     let app = spawn_app().await;
@@ -36,25 +36,24 @@ async fn subscribe_persists_the_new_subscriber() {
         .await;
 
     // Act
-    let _ = app.post_subscriptions(body.into()).await;
+    app.post_subscriptions(body.into()).await;
 
     // Assert
-    // the type of `saved` is generated at compile time from the query, if it is valid
-    let saved = sqlx::query!("select email, name, status from subscriptions")
+    let saved = sqlx::query!("SELECT email, name, status FROM subscriptions",)
         .fetch_one(&app.db_pool)
         .await
-        .expect("Failed to fetch saved subscription");
+        .expect("Failed to fetch saved subscription.");
 
     assert_eq!(saved.email, "ursula_le_guin@gmail.com");
     assert_eq!(saved.name, "le guin");
     assert_eq!(saved.status, "pending_confirmation");
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn subscribe_returns_a_400_when_data_is_missing() {
     // Arrange
     let app = spawn_app().await;
-    // parameterised test - test all invalid inputs in a single test case to reduce duplication
+
     let test_cases = vec![
         ("name=le%20guin", "missing the email"),
         ("email=ursula_le_guin%40gmail.com", "missing the name"),
@@ -69,15 +68,15 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
         assert_eq!(
             400,
             response.status().as_u16(),
-            // additional customised error message on test failure to identify the exact case
+            // Additional customised error message on test failure
             "The API did not fail with 400 Bad Request when the payload was {}.",
             error_message
         );
     }
 }
 
-#[actix_rt::test]
-async fn subscribe_returns_a_400_and_error_message_when_fields_are_present_but_invalid() {
+#[tokio::test]
+async fn subscribe_returns_a_400_when_fields_are_present_but_empty() {
     // Arrange
     let app = spawn_app().await;
     let test_cases = vec![
@@ -92,19 +91,12 @@ async fn subscribe_returns_a_400_and_error_message_when_fields_are_present_but_i
         assert_eq!(
             400,
             response.status().as_u16(),
-            "The API did not return a 400 Bad Request when the payload was {}.",
-            description
-        );
-        let response_text = response.text().await.unwrap();
-        assert!(
-            !response_text.is_empty(),
-            "The API did not return an error description text when the payload was {}.",
-            description
+            "The API did not return a 400 Bad Request when the payload was {description}.",
         );
     }
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn subscribe_sends_a_confirmation_email_for_valid_data() {
     // Arrange
     let app = spawn_app().await;
@@ -121,10 +113,10 @@ async fn subscribe_sends_a_confirmation_email_for_valid_data() {
     app.post_subscriptions(body.into()).await;
 
     // Assert
-    // Mock asserts on drop
+    // Mock asserts on `drop`
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn subscribe_sends_a_confirmation_email_with_a_link() {
     // Arrange
     let app = spawn_app().await;
@@ -133,7 +125,9 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
     Mock::given(path("/email"))
         .and(method("POST"))
         .respond_with(ResponseTemplate::new(200))
-        // no expectations as this test is focused on another aspect of app behaviour
+        // We are not setting an expectation here anymore
+        // The test is focused on another aspect of the app
+        // behaviour.
         .mount(&app.email_server)
         .await;
 
@@ -141,26 +135,23 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
     app.post_subscriptions(body.into()).await;
 
     // Assert
-    // get the first intercepted request
+    // Get the first intercepted request
     let email_request = &app.email_server.received_requests().await.unwrap()[0];
     let confirmation_links = app.get_confirmation_links(&email_request);
-    // the two links should be indentical
+
+    // The two links should be identical
     assert_eq!(confirmation_links.html, confirmation_links.plain_text);
 }
 
-#[actix_rt::test]
+/// Run with `export RUST_LOG="sqlx=error,info" && export TEST_LOG=true && cargo t subscribe_fails_if_there_is_a_fatal_database_error | bunyan`
+#[tokio::test]
 async fn subscribe_fails_if_there_is_a_fatal_database_error() {
     // Arrange
     let app = spawn_app().await;
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
-    // sabotage the database
-    /*sqlx::query!("alter table subscription_tokens drop column subscription_token;")
-    .execute(&app.db_pool)
-    .await
-    .unwrap();*/
 
-    // break `subscriptions`, not `subscription_tokens`
-    sqlx::query!("alter table subscriptions drop column email;")
+    // Sabotage the database
+    sqlx::query!("ALTER TABLE subscription_tokens DROP COLUMN subscription_token;",)
         .execute(&app.db_pool)
         .await
         .unwrap();

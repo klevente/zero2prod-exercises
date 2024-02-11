@@ -1,34 +1,29 @@
 use crate::domain::SubscriberEmail;
-use reqwest::{Client, Url};
+use reqwest::Client;
+use secrecy::{ExposeSecret, Secret};
 
 pub struct EmailClient {
     http_client: Client,
-    base_url: Url,
+    base_url: reqwest::Url,
     sender: SubscriberEmail,
-    authorization_token: String,
+    authorization_token: Secret<String>,
 }
 
 impl EmailClient {
     pub fn new(
         base_url: &str,
         sender: SubscriberEmail,
-        authorization_token: &str,
+        authorization_token: Secret<String>,
         timeout: std::time::Duration,
-    ) -> Result<Self, url::ParseError> {
-        let http_client = Client::builder()
-            // always set a timeout when handling I/O
-            .timeout(timeout)
-            .build()
-            .unwrap();
-        let base_url = Url::parse(base_url)?;
-        Ok(Self {
+    ) -> Self {
+        let http_client = Client::builder().timeout(timeout).build().unwrap();
+        Self {
             http_client,
-            base_url,
+            base_url: reqwest::Url::parse(base_url).expect("Invalid base url."),
             sender,
-            authorization_token: authorization_token.to_string(),
-        })
+            authorization_token,
+        }
     }
-
     pub async fn send_email(
         &self,
         recipient: &SubscriberEmail,
@@ -36,7 +31,10 @@ impl EmailClient {
         html_content: &str,
         text_content: &str,
     ) -> Result<(), reqwest::Error> {
-        let url = self.base_url.join("email").expect("Join failed");
+        let url = self
+            .base_url
+            .join("email")
+            .expect("Failed to join URL segments.");
         let request_body = SendEmailRequest {
             from: self.sender.as_ref(),
             to: recipient.as_ref(),
@@ -46,18 +44,20 @@ impl EmailClient {
         };
         self.http_client
             .post(url)
-            .header("X-Postmark-Server-Token", &self.authorization_token)
+            .header(
+                "X-Postmark-Server-Token",
+                self.authorization_token.expose_secret(),
+            )
             .json(&request_body)
             .send()
             .await?
-            .error_for_status()?; // return `Err` if an error response (4xx, 5xx) is returned
+            .error_for_status()?;
         Ok(())
     }
 }
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "PascalCase")]
-// use string slices to avoid unnecessary cloning
 struct SendEmailRequest<'a> {
     from: &'a str,
     to: &'a str,
@@ -68,9 +68,8 @@ struct SendEmailRequest<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::EmailClient;
-    use crate::domain::SubscriberEmail;
-    use claim::{assert_err, assert_ok};
+    use crate::{domain::SubscriberEmail, email_client::EmailClient};
+    use claims::{assert_err, assert_ok};
     use fake::{
         faker::{
             internet::en::SafeEmail,
@@ -78,32 +77,52 @@ mod tests {
         },
         Fake, Faker,
     };
+    use secrecy::Secret;
     use wiremock::{
         matchers::{any, header, header_exists, method, path},
         Mock, MockServer, Request, ResponseTemplate,
     };
 
+    struct SendEmailBodyMatcher;
+
+    impl wiremock::Match for SendEmailBodyMatcher {
+        fn matches(&self, request: &Request) -> bool {
+            let result = serde_json::from_slice::<serde_json::Value>(&request.body);
+            if let Ok(body) = result {
+                body.get("From").is_some()
+                    && body.get("To").is_some()
+                    && body.get("Subject").is_some()
+                    && body.get("HtmlBody").is_some()
+                    && body.get("TextBody").is_some()
+            } else {
+                false
+            }
+        }
+    }
+
+    /// Generate a random email subject
     fn subject() -> String {
         Sentence(1..2).fake()
     }
 
+    /// Generate a random email content
     fn content() -> String {
         Paragraph(1..10).fake()
     }
 
+    /// Generate a random subscriber email
     fn email() -> SubscriberEmail {
         SubscriberEmail::parse(SafeEmail().fake()).unwrap()
     }
 
+    /// Get a test instance of `EmailClient`
     fn email_client(base_url: &str) -> EmailClient {
-        let authorization_token: String = Faker.fake();
         EmailClient::new(
             base_url,
             email(),
-            authorization_token.as_str(),
+            Secret::new(Faker.fake()),
             std::time::Duration::from_millis(200),
         )
-        .expect("Failed to parse the mock server's URL.")
     }
 
     #[tokio::test]
@@ -123,10 +142,33 @@ mod tests {
             .await;
 
         // Act
-        let outcome = email_client
+        let _ = email_client
             .send_email(&email(), &subject(), &content(), &content())
             .await;
 
+        // Assert - `mock_server` will assert all conditions that are `mount`ed on it upon `drop`
+    }
+
+    #[tokio::test]
+    async fn send_email_succeeds_if_the_server_returns_200() {
+        // Arrange
+        let mock_server = MockServer::start().await;
+        let email_client = email_client(&mock_server.uri());
+
+        // We do not copy in all the matchers we have in the other test.
+        // The purpose of this test is not to assert on the request we
+        // are sending out!
+        // We add the bare minimum needed to trigger the path we want
+        // to test in `send_email`.
+        Mock::given(any())
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+        // Act
+        let outcome = email_client
+            .send_email(&email(), &subject(), &content(), &content())
+            .await;
         // Assert
         assert_ok!(outcome);
     }
@@ -138,6 +180,7 @@ mod tests {
         let email_client = email_client(&mock_server.uri());
 
         Mock::given(any())
+            // Not a 200 anymore!
             .respond_with(ResponseTemplate::new(500))
             .expect(1)
             .mount(&mock_server)
@@ -158,7 +201,9 @@ mod tests {
         let mock_server = MockServer::start().await;
         let email_client = email_client(&mock_server.uri());
 
-        let response = ResponseTemplate::new(200).set_delay(std::time::Duration::from_secs(180));
+        let response = ResponseTemplate::new(200)
+            // 3 minutes!
+            .set_delay(std::time::Duration::from_secs(180));
         Mock::given(any())
             .respond_with(response)
             .expect(1)
@@ -172,25 +217,5 @@ mod tests {
 
         // Assert
         assert_err!(outcome);
-    }
-
-    struct SendEmailBodyMatcher;
-
-    impl wiremock::Match for SendEmailBodyMatcher {
-        fn matches(&self, request: &Request) -> bool {
-            // try to parse the body as JSON
-            let result: Result<serde_json::Value, _> = serde_json::from_slice(&request.body);
-            if let Ok(body) = result {
-                // check that all fields are populated without inspecting their inner values
-                body.get("From").is_some()
-                    && body.get("To").is_some()
-                    && body.get("Subject").is_some()
-                    && body.get("HtmlBody").is_some()
-                    && body.get("TextBody").is_some()
-            } else {
-                // if parse was unsuccessful, do not match the request
-                false
-            }
-        }
     }
 }

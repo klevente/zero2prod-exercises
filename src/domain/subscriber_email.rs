@@ -4,14 +4,11 @@ use validator::validate_email;
 pub struct SubscriberEmail(String);
 
 impl SubscriberEmail {
-    pub fn parse(s: String) -> Result<SubscriberEmail, String> {
+    pub fn parse(s: String) -> Result<Self, String> {
         if validate_email(&s) {
             Ok(Self(s))
         } else {
-            Err(format!(
-                "Subscriber emails must be properly formatted, but '{}' is not",
-                s
-            ))
+            Err(format!("{s} is not a valid subscriber emaill."))
         }
     }
 }
@@ -24,7 +21,8 @@ impl AsRef<str> for SubscriberEmail {
 
 impl std::fmt::Display for SubscriberEmail {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // forward the implementation to the wrapped `String`
+        //We just forward to the Display implementation of
+        //thew rapped String.
         self.0.fmt(f)
     }
 }
@@ -32,9 +30,9 @@ impl std::fmt::Display for SubscriberEmail {
 #[cfg(test)]
 mod tests {
     use super::SubscriberEmail;
-    use claim::assert_err;
-    use fake::faker::internet::en::SafeEmail;
-    use fake::Fake;
+    use claims::assert_err;
+    use fake::{faker::internet::en::SafeEmail, Fake};
+    use rand::{prelude::StdRng, SeedableRng};
 
     #[test]
     fn empty_string_is_rejected() {
@@ -58,14 +56,15 @@ mod tests {
     struct ValidEmailFixture(pub String);
 
     impl quickcheck::Arbitrary for ValidEmailFixture {
-        fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Self {
-            let email = SafeEmail().fake_with_rng(g);
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            let mut rng = StdRng::seed_from_u64(u64::arbitrary(g));
+            let email = SafeEmail().fake_with_rng(&mut rng);
             Self(email)
         }
     }
 
     #[quickcheck_macros::quickcheck]
-    fn valid_emails_are_parsed_successfully(valid_email: ValidEmailFixture) -> bool {
+    fn valid_email_are_parsed_successfully(valid_email: ValidEmailFixture) -> bool {
         SubscriberEmail::parse(valid_email.0).is_ok()
     }
 }
