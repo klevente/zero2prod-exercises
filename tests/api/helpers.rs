@@ -3,10 +3,10 @@ use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use wiremock::MockServer;
-use zero2prod::email_client::EmailClient;
-use zero2prod::issue_delivery_worker::{try_execute_task, ExecutionOutcome};
 use zero2prod::{
     configuration::{get_configuration, DatabaseSettings},
+    email_client::EmailClient,
+    issue_delivery_worker::{try_execute_task, ExecutionOutcome},
     startup::{get_connection_pool, Application},
     telemetry::{get_subscriber, init_subscriber},
 };
