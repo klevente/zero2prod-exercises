@@ -1,4 +1,5 @@
 use crate::authentication::reject_anonymous_users;
+use crate::routes::publish_newsletter_form;
 use crate::{
     configuration::{DatabaseSettings, Settings},
     email_client::EmailClient,
@@ -105,6 +106,7 @@ async fn run(
                     .route("/password", web::get().to(change_password_form))
                     .route("/password", web::post().to(change_password))
                     .route("/logout", web::post().to(log_out))
+                    .route("/newsletters", web::get().to(publish_newsletter_form))
                     .route("/newsletters", web::post().to(publish_newsletter)),
             )
             .app_data(db_pool.clone())
