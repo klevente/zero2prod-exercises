@@ -25,3 +25,7 @@ Improve the subscription flow by thinking about the topics below:
 ## Error Handling
 
 Errors should be logged when they are handled, so if the error is being propagated upstream via `?` or `return Err(...)`, the error should not be logged - the only reasonable operation would be to add additional context to it via these propagating layers.
+
+## Database
+
+After adding/updating queries that are run by `sqlx`, run `cargo sqlx prepare` and check the resulting files into Git to make CI work.
