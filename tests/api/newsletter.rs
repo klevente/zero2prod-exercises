@@ -6,7 +6,7 @@ use fake::{
 use std::time::Duration;
 use wiremock::{
     matchers::{any, method, path},
-    Mock, MockBuilder, ResponseTemplate,
+    Mock, ResponseTemplate,
 };
 
 async fn create_unconfirmed_subscriber(app: &TestApp) -> ConfirmationLinks {
@@ -229,9 +229,4 @@ async fn concurrent_form_submission_is_handled_gracefully() {
     );
     app.dispatch_all_pending_emails().await;
     // Mock verifies on Drop that we have sent the newsletter email **once**
-}
-
-// Shorthand for a common mocking setup
-fn when_sending_an_email() -> MockBuilder {
-    Mock::given(path("/email")).and(method("POST"))
 }
