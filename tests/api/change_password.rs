@@ -61,7 +61,7 @@ async fn new_password_fields_must_match() {
 
     // Assert  - Part 3  - Check page content
     assert!(html_page.contains(
-        "<p><i>You entered two different new passwords  - \
+        "<p><i>You entered two different new passwords - \
         the field values must match.</i></p>"
     ));
 }

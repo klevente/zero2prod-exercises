@@ -61,6 +61,6 @@ pub async fn change_password(
         .await
         .map_err(e500)?;
 
-    FlashMessage::info("Your password has been changed").send();
+    FlashMessage::info("Your password has been changed.").send();
     Ok(see_other("/admin/password"))
 }
